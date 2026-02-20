@@ -1,41 +1,118 @@
-const User = require("../models/User");
+const Student = require("../models/user");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
+// =========================
+// REGISTER CONTROLLER
+// =========================
 exports.register = async (req, res) => {
-  const { usn, name, semester, email, password, role } = req.body;
+  try {
+    const { usn, name, semester, email, password, role } = req.body;
 
-  const existing = await User.findOne({ $or: [{ usn }, { email }] });
-  if (existing) return res.status(400).json({ msg: "User already exists" });
+    if (!usn || !name || !semester || !email || !password || !role) {
+      return res.status(400).json({ msg: "All fields are required" });
+    }
 
-  const hashed = await bcrypt.hash(password, 10);
+    const existingUser = await Student.findOne({
+      $or: [{ usn }, { email }]
+    });
 
-  const user = await User.create({
-    usn,
-    name,
-    semester,
-    email,
-    password: hashed,
-    role
-  });
+    if (existingUser) {
+      return res.status(400).json({ msg: "User already exists" });
+    }
 
-  res.json(user);
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const student = await Student.create({
+      usn,
+      name,
+      semester,
+      email,
+      password: hashedPassword,
+      role
+    });
+
+    res.status(201).json({
+      msg: "User registered successfully",
+      user: {
+        id: student._id,
+        usn: student.usn,
+        name: student.name,
+        semester: student.semester,
+        email: student.email,
+        role: student.role
+      }
+    });
+
+  } catch (err) {
+    console.error("Register error:", err);
+    res.status(500).json({ msg: "Server error during registration" });
+  }
 };
 
+// =========================
+// LOGIN CONTROLLER
+// =========================
 exports.login = async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  const user = await User.findOne({ email });
-  if (!user) return res.status(400).json({ msg: "Invalid credentials" });
+    if (!email || !password) {
+      return res.status(400).json({ msg: "Email and password are required" });
+    }
 
-  const match = await bcrypt.compare(password, user.password);
-  if (!match) return res.status(400).json({ msg: "Invalid credentials" });
+    const student = await Student.findOne({ email });
 
-  const token = jwt.sign(
-    { id: user._id, role: user.role },
-    process.env.JWT_SECRET,
-    { expiresIn: "1d" }
-  );
+    if (!student) {
+      return res.status(400).json({ msg: "Invalid credentials" });
+    }
 
-  res.json({ token, user });
+    const isMatch = await bcrypt.compare(password, student.password);
+
+    if (!isMatch) {
+      return res.status(400).json({ msg: "Invalid credentials" });
+    }
+
+    const token = jwt.sign(
+      { id: student._id, role: student.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "1d" }
+    );
+
+    res.json({
+      msg: "Login successful",
+      token,
+      user: {
+        id: student._id,
+        usn: student.usn,
+        name: student.name,
+        semester: student.semester,
+        email: student.email,
+        role: student.role
+      }
+    });
+
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ msg: "Server error during login" });
+  }
+};
+
+// =========================
+// GET CURRENT USER (/me)
+// =========================
+exports.getMe = async (req, res) => {
+  try {
+    const student = await Student.findById(req.user.id).select("-password");
+
+    if (!student) {
+      return res.status(404).json({ msg: "User not found" });
+    }
+
+    res.json(student);
+
+  } catch (err) {
+    console.error("GetMe error:", err);
+    res.status(500).json({ msg: "Server error while fetching user" });
+  }
 };

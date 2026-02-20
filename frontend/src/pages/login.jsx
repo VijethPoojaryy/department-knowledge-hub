@@ -16,7 +16,7 @@ export default function Login({ onLogin }) {
         body: JSON.stringify(form),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.message || "Login failed");
+      if (!res.ok) throw new Error(data.msg || "Login failed");
       localStorage.setItem("token", data.token);
       onLogin(data.user);
     } catch (err) {
